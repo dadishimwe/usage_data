@@ -7,10 +7,11 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 class Config:
     """
     Configuration class for the Flask app.
-    Sets up the database URI and other configurations.
+    Uses environment variables for production settings.
     """
-    # Define the database URI. It points to a file named app.db
-    # in an 'instance' folder at the same level as your app.py.
-    # Flask will automatically create the 'instance' folder.
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'instance', 'app.db')
+    # Use the DATABASE_URL from the environment if it's available (for Render).
+    # Otherwise, fall back to the local SQLite database for development.
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+        'sqlite:///' + os.path.join(basedir, 'instance', 'app.db')
+    
     SQLALCHEMY_TRACK_MODIFICATIONS = False
