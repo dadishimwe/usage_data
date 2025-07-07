@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- The client's name will be dynamically inserted into the title -->
+    <title>{{ client.name }} - Usage Details</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="detail-header">
+            <div>
+                <!-- Link back to the main dashboard -->
+                <a href="/" class="back-link">&larr; Back to Overview</a>
+                <h1>{{ client.name }}</h1>
+            </div>
+            <!-- Form for downloading the CSV report -->
+            <a href="/api/client/{{ client.id }}/report/csv" class="button-primary" download>Download Full Report (CSV)</a>
+        </header>
+
+        <main>
+            <!-- Section for the current billing cycle -->
+            <section class="card">
+                <h2 id="current-cycle-label">Current Billing Cycle</h2>
+                <div class="chart-container" style="height: 250px;">
+                    <canvas id="current-cycle-chart"></canvas>
+                </div>
+            </section>
+
+            <!-- Section for historical data -->
+            <section class="historical-section">
+                <h2>Historical Data</h2>
+                <div id="historical-charts-container">
+                    <p class="loading-message">Loading historical data...</p>
+                </div>
+            </section>
+        </main>
+    </div>
+    <!-- We need to pass the client ID to our JavaScript file -->
+    <script>
+        const CLIENT_ID = {{ client.id }};
+    </script>
+    <script src="{{ url_for('static', filename='js/client_detail.js') }}"></script>
+</body>
+</html>
