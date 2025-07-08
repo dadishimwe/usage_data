@@ -38,7 +38,7 @@
 
             <div class="grid-container">
                 <section class="card">
-                    <h2>Historical Data</h2>
+                    <h2>Historical Summary</h2>
                     <div id="historical-data-container">
                         <table>
                             <thead>
@@ -66,6 +66,15 @@
                     </div>
                 </section>
             </div>
+
+            <!-- This section will now contain the full historical charts -->
+            <section class="historical-section">
+                <h2>Historical Charts</h2>
+                <div id="historical-charts-container" class="historical-charts-grid">
+                    <p class="loading-message">Loading historical charts...</p>
+                </div>
+            </section>
+
         </main>
     </div>
     <script> const CLIENT_ID = {{ client.id }}; </script>
