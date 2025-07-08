@@ -1,34 +1,58 @@
 # app.py
-from flask import Flask, render_template, jsonify, Response
+from flask import Flask, render_template, jsonify, Response, request
 from flask_sqlalchemy import SQLAlchemy
 from config import Config
 import pandas as pd
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 import io
+from weasyprint import HTML
+from sklearn.linear_model import LinearRegression
+import numpy as np
 
-# Initialize the Flask app and configure it from the Config object
+# Initialize the Flask app and configure it
 app = Flask(__name__)
 app.config.from_object(Config)
-
-# Initialize the database extension
 db = SQLAlchemy(app)
 
-# --- Helper Function for Billing Cycles ---
+# --- Helper Functions ---
 def get_billing_cycle(target_date=None):
-    """Calculates the start and end date of a billing cycle based on a target date."""
     if target_date is None:
         target_date = date.today()
-    
     if target_date.day < 13:
-        # Cycle is from 13th of last month to 12th of this month
         start_date = (target_date - relativedelta(months=1)).replace(day=13)
         end_date = target_date.replace(day=12)
     else:
-        # Cycle is from 13th of this month to 12th of next month
         start_date = target_date.replace(day=13)
         end_date = (target_date + relativedelta(months=1)).replace(day=12)
     return start_date, end_date
+
+def forecast_current_cycle_usage(client_id):
+    """Forecasts the total usage for the current billing cycle."""
+    cycle_start, cycle_end = get_billing_cycle()
+    
+    usage_records = DataUsage.query.filter(
+        DataUsage.client_id == client_id,
+        DataUsage.date >= cycle_start,
+        DataUsage.date <= cycle_end
+    ).order_by(DataUsage.date.asc()).all()
+
+    if not usage_records:
+        return 0.0
+
+    days_so_far = np.array([(record.date - cycle_start).days + 1 for record in usage_records]).reshape(-1, 1)
+    cumulative_usage = np.cumsum([record.usage_gb for record in usage_records])
+
+    if len(days_so_far) < 2: # Not enough data to forecast
+        return cumulative_usage[-1]
+
+    model = LinearRegression()
+    model.fit(days_so_far, cumulative_usage)
+
+    total_days_in_cycle = (cycle_end - cycle_start).days + 1
+    predicted_usage = model.predict(np.array([[total_days_in_cycle]]))[0]
+    
+    return max(predicted_usage, cumulative_usage[-1]) # Forecast can't be less than current usage
 
 # --- Database Models ---
 class Client(db.Model):
@@ -46,28 +70,25 @@ class DataUsage(db.Model):
 # --- HTML Page Routes ---
 @app.route('/')
 def dashboard():
-    """Renders the main dashboard page."""
     return render_template('index.html')
 
 @app.route('/client/<int:client_id>')
 def client_detail_page(client_id):
-    """Renders the detailed page for a single client."""
     client = Client.query.get_or_404(client_id)
     return render_template('client_detail.html', client=client)
 
 # --- API Routes ---
 @app.route('/api/clients')
 def get_clients():
-    """API endpoint for the main dashboard client list."""
     clients = Client.query.all()
     client_data = []
-    cycle_start_date, cycle_end_date = get_billing_cycle()
+    cycle_start_date, _ = get_billing_cycle()
 
     for client in clients:
         total_usage = db.session.query(db.func.sum(DataUsage.usage_gb)).filter(
             DataUsage.client_id == client.id,
             DataUsage.date >= cycle_start_date,
-            DataUsage.date <= cycle_end_date
+            DataUsage.date <= date.today()
         ).scalar() or 0.0
         
         usage_percentage = (total_usage / client.monthly_limit_gb) * 100 if client.monthly_limit_gb > 0 else 0
@@ -83,7 +104,6 @@ def get_clients():
 
 @app.route('/api/client/<int:client_id>/usage/current')
 def get_client_current_usage(client_id):
-    """API endpoint for a client's usage in the CURRENT billing cycle."""
     cycle_start, cycle_end = get_billing_cycle()
     usage_records = DataUsage.query.filter(
         DataUsage.client_id == client_id,
@@ -93,26 +113,27 @@ def get_client_current_usage(client_id):
     
     labels = [record.date.strftime('%b %d') for record in usage_records]
     data = [record.usage_gb for record in usage_records]
+    forecast = forecast_current_cycle_usage(client_id)
     
-    return jsonify({'labels': labels, 'data': data, 'cycle_label': f"{cycle_start.strftime('%b %d')} - {cycle_end.strftime('%b %d, %Y')}"})
+    return jsonify({
+        'labels': labels, 
+        'data': data, 
+        'cycle_label': f"{cycle_start.strftime('%b %d')} - {cycle_end.strftime('%b %d, %Y')}",
+        'forecast': round(forecast, 2)
+    })
 
 @app.route('/api/client/<int:client_id>/usage/historical')
 def get_client_historical_usage(client_id):
-    """API endpoint for a client's historical monthly usage data."""
     first_record = DataUsage.query.order_by(DataUsage.date.asc()).first()
-    if not first_record:
-        return jsonify([])
+    if not first_record: return jsonify([])
 
     historical_data = []
-    # Start from the cycle of the first record
-    current_date = first_record.date 
+    current_date = first_record.date
     today = date.today()
 
     while True:
         cycle_start, cycle_end = get_billing_cycle(current_date)
-        # Stop if the cycle start is in the future
-        if cycle_start > today:
-            break
+        if cycle_start > today: break
         
         usage_records = DataUsage.query.filter(
             DataUsage.client_id == client_id,
@@ -120,46 +141,68 @@ def get_client_historical_usage(client_id):
             DataUsage.date <= cycle_end
         ).order_by(DataUsage.date.asc()).all()
 
-        if usage_records: # Only add cycles with data
-            labels = [record.date.strftime('%b %d') for record in usage_records]
-            data = [record.usage_gb for record in usage_records]
-            total_usage = sum(data)
-            
+        if usage_records:
+            total_usage = sum(record.usage_gb for record in usage_records)
             historical_data.append({
                 'cycle_label': f"{cycle_start.strftime('%b %d')} - {cycle_end.strftime('%b %d, %Y')}",
-                'labels': labels,
-                'data': data,
                 'total_usage': round(total_usage, 2)
             })
-        
-        # Move to the next cycle
         current_date = cycle_end + relativedelta(days=1)
 
     return jsonify(historical_data)
 
-@app.route('/api/client/<int:client_id>/report/csv')
-def generate_csv_report(client_id):
-    """Generates and streams a CSV report for a client."""
+@app.route('/api/client/<int:client_id>/report/pdf')
+def generate_pdf_report(client_id):
     client = Client.query.get_or_404(client_id)
-    usage_records = DataUsage.query.filter_by(client_id=client_id).order_by(DataUsage.date.asc()).all()
+    num_cycles = request.args.get('cycles', default=3, type=int)
+    report_type = request.args.get('type', default='standard') # 'standard' or 'upgrade'
+
+    historical_data = []
+    total_usage = 0
+    today = date.today()
+
+    for i in range(num_cycles):
+        target_date = today - relativedelta(months=i)
+        cycle_start, cycle_end = get_billing_cycle(target_date)
+        
+        usage_records = DataUsage.query.filter(
+            DataUsage.client_id == client.id,
+            DataUsage.date >= cycle_start,
+            DataUsage.date <= cycle_end
+        ).all()
+
+        if usage_records:
+            cycle_total = sum(record.usage_gb for record in usage_records)
+            total_usage += cycle_total
+            historical_data.append({
+                'cycle_label': f"{cycle_start.strftime('%b %d, %Y')} - {cycle_end.strftime('%b %d, %Y')}",
+                'total_usage': cycle_total
+            })
+
+    average_usage = total_usage / num_cycles if num_cycles > 0 else 0
+    recommendation = None
+    if report_type == 'upgrade' and average_usage > client.monthly_limit_gb * 0.8:
+        recommendation = f"The client's average usage of {average_usage:.2f} GB is approaching the cap of {client.monthly_limit_gb} GB. Consider recommending an upgrade."
+
+    report_start = (today - relativedelta(months=num_cycles-1)).replace(day=13)
+    report_end = today.replace(day=12)
     
-    # Create a Pandas DataFrame
-    data = {
-        'Date': [record.date.strftime('%Y-%m-%d') for record in usage_records],
-        'Usage (GB)': [record.usage_gb for record in usage_records]
-    }
-    df = pd.DataFrame(data)
-    
-    # Create an in-memory text stream
-    output = io.StringIO()
-    df.to_csv(output, index=False)
-    output.seek(0)
-    
-    return Response(
-        output,
-        mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment;filename={client.name}_usage_report.csv"}
+    rendered_html = render_template(
+        'report_template.html',
+        client=client,
+        historical_data=historical_data,
+        total_usage=total_usage,
+        average_usage=average_usage,
+        recommendation=recommendation,
+        report_period=f"{report_start.strftime('%B %d, %Y')} to {report_end.strftime('%B %d, %Y')}",
+        generation_date=datetime.now().strftime('%B %d, %Y')
     )
+    
+    pdf = HTML(string=rendered_html).write_pdf()
+    
+    return Response(pdf, mimetype='application/pdf', headers={
+        'Content-Disposition': f'attachment;filename={client.name}_report.pdf'
+    })
 
 if __name__ == '__main__':
     with app.app_context():
