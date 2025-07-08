@@ -26,7 +26,7 @@ body {
 }
 
 header h1 { font-size: 2rem; font-weight: 600; margin: 0; }
-.card-header h2 { margin: 0; font-size: 1.25rem; font-weight: 500; }
+.card-header h2, .card-header h3 { margin: 0; font-size: 1.25rem; font-weight: 500; }
 .chart-container { height: 150px; margin-bottom: 16px; }
 
 /* --- Main Dashboard --- */
@@ -64,3 +64,32 @@ th { font-weight: 500; color: var(--text-secondary); }
 .button-primary, .button-secondary { padding: 10px; border: none; border-radius: 5px; font-weight: 500; cursor: pointer; text-align: center; }
 .button-primary { background-color: var(--button-primary-bg); color: var(--button-primary-text); }
 .button-secondary { background-color: var(--button-secondary-bg); color: var(--button-secondary-text); border: 1px solid var(--border-color); }
+
+/* --- Historical Charts Section --- */
+.historical-section {
+    margin-top: 40px;
+}
+.historical-section h2 {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+.historical-charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 20px;
+}
+.historical-card .card-header h3 {
+    font-size: 1.1rem;
+}
+.usage-summary {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+.loading-message {
+    text-align: center;
+    font-size: 1rem;
+    color: var(--text-secondary);
+    grid-column: 1 / -1;
+    padding: 40px 0;
+}
