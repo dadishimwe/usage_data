@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ client.name }} - Usage Report</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; color: #333; }
+        .container { width: 90%; margin: 0 auto; }
+        header { text-align: center; border-bottom: 1px solid #eee; padding-bottom: 20px; margin-bottom: 30px; }
+        h1 { font-size: 28px; color: #111; margin: 0; }
+        h2 { font-size: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 40px; }
+        .summary-card { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .recommendation { background-color: #fffbe6; border-left: 4px solid #f59e0b; padding: 15px; }
+        .chart-container { width: 100%; height: 300px; margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>{{ client.name }}</h1>
+            <p>Data Usage Report for {{ report_period }}</p>
+            <p style="font-size: 12px; color: #888;">Generated on: {{ generation_date }}</p>
+        </header>
+
+        <section class="summary-card">
+            <h2>Overall Summary</h2>
+            <p><strong>Total Usage:</strong> {{ total_usage | round(2) }} GB</p>
+            <p><strong>Average Monthly Usage:</strong> {{ average_usage | round(2) }} GB</p>
+            <p><strong>Client Cap:</strong> {{ client.monthly_limit_gb }} GB</p>
+        </section>
+
+        {% if recommendation %}
+        <section class="recommendation">
+            <h3>Recommendation</h3>
+            <p>{{ recommendation }}</p>
+        </section>
+        {% endif %}
+
+        <section>
+            <h2>Usage Details per Cycle</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Billing Cycle</th>
+                        <th>Total Usage (GB)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cycle in historical_data %}
+                    <tr>
+                        <td>{{ cycle.cycle_label }}</td>
+                        <td>{{ cycle.total_usage | round(2) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+    </div>
+</body>
+</html>
