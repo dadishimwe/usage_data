@@ -93,6 +93,6 @@ def import_data(caps_filepath, usage_filepath):
 if __name__ == '__main__':
     # Define file paths
     caps_csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'client_caps.csv')
-    usage_csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'WEEKLY_REPORTS(Sheet1).csv')
+    usage_csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'WEEKLY_REPORTS(datausage)-2.csv')
     
     import_data(caps_csv_path, usage_csv_path)
