@@ -15,7 +15,7 @@ app = Flask(__name__)
 app.config.from_object(Config)
 db = SQLAlchemy(app)
 
-# --- Helper Functions ---
+# --- Helper Function for Billing Cycles ---
 def get_billing_cycle(target_date=None):
     if target_date is None:
         target_date = date.today()
@@ -124,15 +124,18 @@ def get_client_current_usage(client_id):
 
 @app.route('/api/client/<int:client_id>/usage/historical')
 def get_client_historical_usage(client_id):
+    """API endpoint for a client's historical monthly usage data, now with daily details."""
     first_record = DataUsage.query.order_by(DataUsage.date.asc()).first()
     if not first_record: return jsonify([])
 
     historical_data = []
-    current_date = first_record.date
+    # Start from the cycle of the first record, but don't go back more than a few years to be safe
+    current_date = max(first_record.date, date.today() - relativedelta(years=5))
     today = date.today()
 
     while True:
         cycle_start, cycle_end = get_billing_cycle(current_date)
+        # Stop if the cycle start is in the future
         if cycle_start > today: break
         
         usage_records = DataUsage.query.filter(
@@ -142,11 +145,18 @@ def get_client_historical_usage(client_id):
         ).order_by(DataUsage.date.asc()).all()
 
         if usage_records:
-            total_usage = sum(record.usage_gb for record in usage_records)
+            labels = [record.date.strftime('%b %d') for record in usage_records]
+            data = [record.usage_gb for record in usage_records]
+            total_usage = sum(data)
+            
             historical_data.append({
                 'cycle_label': f"{cycle_start.strftime('%b %d')} - {cycle_end.strftime('%b %d, %Y')}",
+                'labels': labels,
+                'data': data,
                 'total_usage': round(total_usage, 2)
             })
+        
+        # Move to the next cycle
         current_date = cycle_end + relativedelta(days=1)
 
     return jsonify(historical_data)
