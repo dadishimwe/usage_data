@@ -4,3 +4,5 @@ pandas
 openpyxl
 gunicorn
 psycopg2-binary
+WeasyPrint
+scikit-learn
